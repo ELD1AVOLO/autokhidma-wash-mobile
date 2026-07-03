@@ -1,23 +1,22 @@
 ﻿workflows:
-  ios-workflow:
-    name: Autokhidma Wash — iOS Build
+
+  # ─── BUILD SANS SIGNATURE (test compile) ─────────────────────────────────
+  # Utilisé pour vérifier que le projet compile sans certificat Apple.
+  ios-build-unsigned:
+    name: "Autokhidma Wash — iOS Build (unsigned)"
     max_build_duration: 60
     environment:
-      ios_signing:
-        distribution_type: development
-        bundle_identifier: ma.autokhidma.wash
+      node: "18"
+      xcode: latest
+      cocoapods: default
       vars:
         XCODE_WORKSPACE: "ios/App/App.xcworkspace"
         XCODE_SCHEME: "App"
-      node: 18
-      xcode: latest
-      cocoapods: default
     triggering:
       events:
         - push
-        - pull_request
       branch_patterns:
-        - pattern: "mobile-apps"
+        - pattern: "master"
           include: true
     scripts:
       - name: Install Node dependencies
@@ -28,20 +27,59 @@
         script: |
           cd ios/App
           pod install
-      - name: Set up code signing settings on Xcode project
-        script: xcode-project use-profiles
-      - name: Build iOS
+      - name: Build (no signing — compile check only)
         script: |
-          xcode-project build-ipa \
-            --workspace "$XCODE_WORKSPACE" \
-            --scheme "$XCODE_SCHEME"
+          xcodebuild \
+            -workspace "$XCODE_WORKSPACE" \
+            -scheme "$XCODE_SCHEME" \
+            -destination "generic/platform=iOS Simulator" \
+            -configuration Release \
+            CODE_SIGNING_ALLOWED=NO \
+            | xcpretty
     artifacts:
-      - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
     publishing:
       email:
         recipients:
-          - your@email.com
+          - eld1avolo@gmail.com
         notify:
           success: true
           failure: true
+
+  # ─── BUILD SIGNÉ (TestFlight / device) ───────────────────────────────────
+  # Décommenter quand tu as ajouté ton Apple Developer Certificate dans
+  # Codemagic → Teams → Integrations → Developer Portal
+  # ios-build-signed:
+  #   name: "Autokhidma Wash — iOS Signed Build"
+  #   max_build_duration: 60
+  #   environment:
+  #     ios_signing:
+  #       distribution_type: ad_hoc          # ou: development / app_store
+  #       bundle_identifier: ma.autokhidma.wash
+  #     node: "18"
+  #     xcode: latest
+  #     cocoapods: default
+  #     vars:
+  #       XCODE_WORKSPACE: "ios/App/App.xcworkspace"
+  #       XCODE_SCHEME: "App"
+  #   scripts:
+  #     - name: Install Node dependencies
+  #       script: npm install
+  #     - name: Capacitor sync
+  #       script: npx cap sync ios
+  #     - name: Install CocoaPods
+  #       script: |
+  #         cd ios/App
+  #         pod install
+  #     - name: Apply code signing
+  #       script: xcode-project use-profiles
+  #     - name: Build IPA
+  #       script: |
+  #         xcode-project build-ipa \
+  #           --workspace "$XCODE_WORKSPACE" \
+  #           --scheme "$XCODE_SCHEME"
+  #   artifacts:
+  #     - build/ios/ipa/*.ipa
+  #   publishing:
+  #     app_store_connect:
+  #       auth: integration
